@@ -43,6 +43,45 @@ sub create_record {
         Object => $queue,
     ) and $queue->Disabled != 1;
 
+    if ( defined $data->{Content} ) {
+        $data->{MIMEObj} = HTML::Mason::Commands::MakeMIMEEntity(
+            Interface => 'REST',
+            Body      => delete $data->{Content} || '',
+            Type      => delete $data->{ContentType} || 'text/plain',
+            ( map { $_ => delete $data->{$_} } grep { defined $data->{$_} } qw/From To Date/ ),
+            # Keep Subject and Cc since they are valid parameters of RT::Ticket::Create
+            ( map { $_ => $data->{$_} } grep        { defined $data->{$_} } qw/Subject Cc/ ),
+        );
+
+        if (defined $data->{Attachments} && ref $data->{Attachments} eq 'ARRAY' && scalar(@{$data->{Attachments}}) > 0) {
+            $data->{MIMEObj}->make_multipart;
+
+            foreach my $attachment (@{$data->{Attachments}}) {
+                if (!$$attachment{ContentType}) {
+                    return error_as_json(
+                        $self->response,
+                        \400, "ContentType is a required attachment field");
+                }
+
+                if (!$$attachment{Filename}) {
+                    $$attachment{Filename} = "unknown.dat";
+                }
+
+                if (!$$attachment{Content}) {
+                    return error_as_json(
+                        $self->response,
+                        \400, "Content is a required attachment field");
+                }
+
+                $data->{MIMEObj}->attach(
+                    Type => $$attachment{ContentType},
+                    Filename => $$attachment{Filename},
+                    Data => MIME::Base64::decode_base64($$attachment{Content})
+                );
+            }
+        }
+    }
+
     my ($ok, $txn, $msg) = $self->_create_record($data);
     return ($ok, $msg);
 }
