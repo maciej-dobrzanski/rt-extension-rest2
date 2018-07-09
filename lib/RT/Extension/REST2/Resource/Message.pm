@@ -58,6 +58,10 @@ sub from_json {
     $self->add_message(%$body);
 }
 
+sub dummy_decode {
+    return @_;
+}
+
 sub add_message {
     my $self = shift;
     my %args = @_;
@@ -68,6 +72,56 @@ sub add_message {
         Type      => $args{ContentType} || $self->request->content_type,
         Subject   => $args{Subject},
     );
+
+    if (defined $args{Attachments} && ref $args{Attachments} eq 'ARRAY' && scalar(@{$args{Attachments}}) > 0) {
+        $MIME->make_multipart;
+
+        foreach my $attachment (@{$args{Attachments}}) {
+            if (!$$attachment{ContentType}) {
+                return error_as_json(
+                    $self->response,
+                    \400, "ContentType is a required attachment field");
+            }
+
+            if (!$$attachment{Filename}) {
+                $$attachment{Filename} = "unknown.dat";
+            }
+
+            if (!$$attachment{Content}) {
+                return error_as_json(
+                    $self->response,
+                    \400, "Content is a required attachment field");
+            }
+
+            if (!RT::I18N::IsTextualContentType($$attachment{ContentType}) && !$$attachment{ContentEncoding}) {
+                return error_as_json(
+                    $self->response,
+                    \400, "ContentEncoding is required");
+            }
+
+            my $decode;
+
+            if ($$attachment{ContentEncoding}) {
+                if ($$attachment{ContentEncoding} eq "none") {
+                    $decode = \&dummy_decode;
+                } else
+                if ($$attachment{ContentEncoding} eq "base64") {
+                    $decode = \&MIME::Base64::decode_base64;
+                }
+                else {
+                    return error_as_json(
+                        $self->response,
+                        \400, "Unsupported content encoding");
+                }
+            }
+
+            $MIME->attach(
+                Type => $$attachment{ContentType},
+                Filename => $$attachment{Filename},
+                Data => $decode->($$attachment{Content})
+            );
+        }
+    }
 
     my ( $Trans, $msg, $TransObj ) ;
 

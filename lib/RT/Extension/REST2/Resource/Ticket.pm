@@ -26,6 +26,10 @@ sub dispatch_rules {
     )
 }
 
+sub dummy_decode {
+    return @_;
+}
+
 sub create_record {
     my $self = shift;
     my $data = shift;
@@ -73,10 +77,32 @@ sub create_record {
                         \400, "Content is a required attachment field");
                 }
 
+                if (!RT::I18N::IsTextualContentType($$attachment{ContentType}) && !$$attachment{ContentEncoding}) {
+                    return error_as_json(
+                        $self->response,
+                        \400, "ContentEncoding is required");
+                }
+
+                my $decode;                 
+
+                if ($$attachment{ContentEncoding}) {
+                    if ($$attachment{ContentEncoding} eq "none") {
+                        $decode = \&dummy_decode;
+                    } else
+                    if ($$attachment{ContentEncoding} eq "base64") {
+                        $decode = \&MIME::Base64::decode_base64;
+                    }
+                    else {
+                        return error_as_json(
+                            $self->response,
+                            \400, "Unsupported content encoding");
+                    }
+                }
+
                 $data->{MIMEObj}->attach(
                     Type => $$attachment{ContentType},
                     Filename => $$attachment{Filename},
-                    Data => MIME::Base64::decode_base64($$attachment{Content})
+                    Data => $decode->($$attachment{Content})
                 );
             }
 

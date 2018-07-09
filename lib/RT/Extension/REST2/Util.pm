@@ -90,6 +90,11 @@ sub serialize_record {
         }
     }
 
+    if ($record->isa("RT::Attachment") && $data{Content}) {
+        $data{ContentEncoding} = "base64";
+        $data{Content} = MIME::Base64::encode_base64($data{Content});
+    }
+
     # Replace UIDs with object placeholders
     for my $uid (grep ref eq 'SCALAR', values %data) {
         $uid = expand_uid($uid);
