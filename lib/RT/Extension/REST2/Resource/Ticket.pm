@@ -79,6 +79,8 @@ sub create_record {
                     Data => MIME::Base64::decode_base64($$attachment{Content})
                 );
             }
+
+            delete $data->{Attachments};
         }
     }
 
