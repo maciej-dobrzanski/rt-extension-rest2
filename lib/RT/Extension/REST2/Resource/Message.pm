@@ -99,13 +99,13 @@ sub add_message {
                     \400, "ContentEncoding is required");
             }
 
-            my $decode;
+            my $decode = \&dummy_decode;
 
             if ($$attachment{ContentEncoding}) {
                 if ($$attachment{ContentEncoding} eq "none") {
                     $decode = \&dummy_decode;
-                } else
-                if ($$attachment{ContentEncoding} eq "base64") {
+                }
+                elsif ($$attachment{ContentEncoding} eq "base64") {
                     $decode = \&MIME::Base64::decode_base64;
                 }
                 else {
